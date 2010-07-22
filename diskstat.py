@@ -23,7 +23,7 @@
 ###    [Can be overriden if "devices" is set]
 ###
 ###  Changelog:
-###    v1.0.1 - 2010-07-21
+###    v1.0.1 - 2010-07-22
 ###       * Initial version
 ###
 
