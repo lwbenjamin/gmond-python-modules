@@ -6,7 +6,7 @@ modules {
     language = 'python'
 
     param httpd {
-      value = '\/usr\/sbin\/httpd'
+      value = '/var/run/httpd.pid'
     }
 
     param mysqld {
@@ -14,7 +14,11 @@ modules {
     }
 
     param splunk {
-      value = 'splunkd.*start|twistd.*SplunkWeb'
+      value = 'splunkd.*start'
+    }
+
+    param splunk-web {
+      value = 'twistd.*SplunkWeb'
     }
   }
 }
