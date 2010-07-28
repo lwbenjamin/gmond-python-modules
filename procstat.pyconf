@@ -10,15 +10,15 @@ modules {
     }
 
     param mysqld {
-      value = '\/usr\/libexec\/mysqld'
+      value = '/\/usr\/libexec\/mysqld/'
     }
 
     param splunk {
-      value = 'splunkd.*start'
+      value = '/splunkd.*start/'
     }
 
     param splunk-web {
-      value = 'twistd.*SplunkWeb'
+      value = '/twistd.*SplunkWeb/'
     }
   }
 }
