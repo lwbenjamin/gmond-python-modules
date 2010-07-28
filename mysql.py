@@ -38,7 +38,7 @@ import MySQLdb
 from DBUtil import parse_innodb_status
 
 import logging
-logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(name)s - %(levelname)s - Thread-%(thread)d - %(message)s", filename='/tmp/mylog', filemode='w')
+logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(name)s - %(levelname)s\t Thread-%(thread)d - %(message)s", filename='/tmp/gmond.log', filemode='w')
 logging.warning('starting up')
 
 last_update = 0

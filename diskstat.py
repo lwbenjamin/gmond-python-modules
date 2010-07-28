@@ -36,7 +36,7 @@ import subprocess
 import traceback
 import logging
 
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s\t Thread-%(thread)d - %(message)s", filename='/tmp/diskstats_log')
+logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(name)s - %(levelname)s\t Thread-%(thread)d - %(message)s", filename='/tmp/gmond.log', filemode='w')
 logging.debug('starting up')
 
 last_update = 0
@@ -297,7 +297,7 @@ def metric_init(params):
 
 				descriptors.append(d)
 			else:
-				logging.warning("skipped " + label)
+				logging.error("skipped " + label)
 
 	#logging.debug('descriptors: ' + str(descriptors))
 
