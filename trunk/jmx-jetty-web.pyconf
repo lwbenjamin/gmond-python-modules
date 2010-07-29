@@ -1,0 +1,53 @@
+#
+
+modules {
+  module {
+    name = 'jmxsh'
+    language = 'python'
+
+    param host {
+      value = 'localhost'
+    }
+    param port {
+      value = '8887'
+    }
+    param name {
+      value = 'jetty-web'
+    }
+
+    param sessions {
+      value = 'org.mortbay.jetty.servlet:type=hashsessionmanager,id=0 sessions'
+    }
+    param threads {
+      value = 'org.mortbay.thread:type=queuedthreadpool,id=0 threads'
+    }
+    param idle_threads {
+      value = 'org.mortbay.thread:type=queuedthreadpool,id=0 idleThreads'
+    }
+    param queue_size {
+      value = 'org.mortbay.thread:type=queuedthreadpool,id=0 queueSize'
+    }
+  }
+}
+
+collection_group {
+  collect_every = 60
+  time_threshold = 60
+
+  metric {
+    name = 'jmx_jetty-web_sessions'
+  }
+
+  metric {
+    name = 'jmx_jetty-web_threads'
+  }
+
+  metric {
+    name = 'jmx_jetty-web_idle_threads'
+  }
+
+  metric {
+    name = 'jmx_jetty-web_queue_size'
+  }
+}
+
