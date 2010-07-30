@@ -1,11 +1,17 @@
 ###  This script reports jmx metrics to ganglia.
 ###
 ###  Notes:
-###    THIS IS AN UNTESTED VERSION!
+###    This script exposes user defined MBeans to Ganglia. The
+###    initial execution will attempt to determin value types based
+###    on the returned values.
 ###
 ###  Changelog:
 ###    v0.0.1 - 2010-07-29
 ###      * Initial version
+###
+###    v1.0.1 - 2010-07-30
+###      * Modified jmxsh to read from stdin
+###      * Tested to work with gmond python module
 ###
 
 ###  Copyright Jamie Isaacs. 2010
@@ -18,21 +24,16 @@ import traceback, sys
 import tempfile
 import logging
 
-#logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(name)s - %(levelname)s\t Thread-%(thread)d - %(message)s", filename='/tmp/gmond.log', filemode='w')
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s\t Thread-%(thread)d - %(message)s", filename='/tmp/gmond.log2')
-logging.debug('')
-logging.debug('')
-logging.debug('#################')
-logging.debug('## starting up ##')
-logging.debug('##################################################')
+logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(name)s - %(levelname)s\t Thread-%(thread)d - %(message)s", filename='/tmp/gmond.log', filemode='w')
+logging.debug('starting up')
 
 last_update = 0
 stats = {}
 
 METRICS = {}
 HOST = 'localhost'
-PORT = 8887
-NAME = str(PORT)
+PORT = '8887'
+NAME = PORT
 
 MAX_UPDATE_TIME = 15
 JMXSH = '/usr/share/java/jmxsh.jar'
@@ -83,32 +84,32 @@ def update_stats():
 	for name,mbean in METRICS.items():
 		sh += 'puts "' + name + ': [jmx_get -m ' + mbean + ']"\n'
 
-	# Write to temp file
-	(fd, fname) = tempfile.mkstemp()
-	file = open(fname, 'w')
-	file.write(sh)
-	file.close()
-	#logging.debug(fname + '\n' + sh)
+	#logging.debug(sh)
 	
-	# run jmxsh.jar with the temp file as a script
-	cmd = "java -jar " + JMXSH + " " + fname
-	p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	out, err = p.communicate()
-	logging.debug('cmd: ' + cmd + '\nout: ' + out + '\nerr: ' + err + '\ncode: ' + str(p.returncode))
+	try:
+		# run jmxsh.jar with the temp file as a script
+		cmd = "java -jar " + JMXSH + " -q"
+		p = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		out, err = p.communicate(sh)
+		#logging.debug('cmd: ' + cmd + '\nout: ' + out + '\nerr: ' + err + '\ncode: ' + str(p.returncode))
 
-	# we don't need the file anymore
-	os.remove(fname)
-
-	if p.returncode:
-		logging.warning('failed executing ps\n' + cmd + '\n' + err)
+		if p.returncode:
+			logging.warning('failed executing ps\n' + cmd + '\n' + err)
+			return False
+	except:
+		logging.warning('Error running jmx java\n' + traceback.print_exc(file=sys.stdout))
 		return False
 
-	# now parse out the values
-	for line in out.strip().split('\n'):
-		params = line.split(': ')
-		name = params[0]
-		val = params[1]
-		stats[name] = get_numeric(val)
+	try:
+		# now parse out the values
+		for line in out.strip().split('\n'):
+			params = line.split(': ')
+			name = params[0]
+			val = params[1]
+			stats[name] = get_numeric(val)
+	except:
+		logging.warning('Error parsing\n' + traceback.print_exc(file=sys.stdout))
+		return False
 
 	logging.debug('success refreshing stats')
 	logging.debug('stats: ' + str(stats))
@@ -176,7 +177,7 @@ def metric_init(params):
 				'slope': 'both',
 				'format': '%u',
 				'description': label,
-				'groups': 'procstat'
+				'groups': 'jmx'
 			}
 
 			# Apply metric customizations from descriptions
