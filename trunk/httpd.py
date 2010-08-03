@@ -4,7 +4,7 @@
 ###    The following mod_status variables only report average values
 ###    over the lifetime of the running process: CPULoad, ReqPerSec,
 ###    BytesPerSec, and BytesPerReq. This script checks the system
-###    for CPU utilization and memory usage and ignores the other
+###    for child process average memory usage and ignores the other
 ###    averages.
 ###
 ###    This script makes use of the ExtendedStatus metrics from
@@ -17,9 +17,17 @@
 ###    To use these values you must enable them with the "prefork"
 ###    option.
 ###
+###    TODO
+###       * Update avg memory usage to use Linux /proc/[pid]/statm
+###       * Add scoreboard metrics?
+###
 ###  Changelog:
 ###    v1.0.1 - 2010-07-21
 ###       * Initial version
+###
+###    v1.1.0 - 2010-08-03
+###       * Code cleanup
+###       * Removed CPU utilization
 ###
 
 ###  Copyright Jamie Isaacs. 2010
@@ -45,10 +53,11 @@ server_stats = {}
 
 MAX_UPDATE_TIME = 15
 
+#SCOREBOARD_KEY = ('_', 'S', 'R', 'W', 'K', 'D', 'C', 'L', 'G', 'I', '.')
+
 def update_stats():
 	logging.debug('updating stats')
 	global last_update, httpd_stats, httpd_stats_last
-	global STATUS_URL, APACHE_BIN, MAX_UPDATE_TIME
 	
 	cur_time = time.time()
 
@@ -79,6 +88,15 @@ def update_stats():
 				key = 'busy_workers'
 			elif 'IdleWorkers:' in line:
 				key = 'idle_workers'
+			#elif 'Scoreboard:' in line:
+			#	line = line.strip().split(': ')
+			#	logging.debug('  scb: ' + str(line))
+			#	if len(line) == 2:
+			#		scb = line[1]
+			#		# Iterate over each character in scb
+			#		for c in scb:
+			#			print(c)
+			#	continue
 			else:
 				continue
 
@@ -105,6 +123,10 @@ def update_stats():
 		logging.warning(traceback.print_exc(file=sys.stdout))
 		return False
 
+	if not httpd_stats:
+		logging.warning('error refreshing stats')
+		return False
+
 	#####
 	# Update Mem Utilization (avg_worker_size)
 	# only measure the children, not the parent Apache process
@@ -119,20 +141,6 @@ def update_stats():
 		logging.warning('error refreshing stats (avg_worker_size)')
 		return False
 
-	#####
-	# Update CPU utilization
-	# include the main Apache process with all children
-	try:
-		logging.debug(' updating percent_cpu')
-		p = subprocess.Popen("ps -Ao pcpu,args | awk '/" + APACHE_BIN + "/ {sum+=$1;} END {printf sum}'", shell=True, stdout=subprocess.PIPE)
-		out, err = p.communicate()
-		logging.debug('  result: ' + out)
-
-		httpd_stats['percent_cpu'] = float(out)
-	except:
-		logging.warning('error refreshing stats (percent_cpu)')
-		return False
-
 	logging.debug('success refreshing stats')
 	logging.debug('httpd_stats: ' + str(httpd_stats))
 
@@ -140,8 +148,7 @@ def update_stats():
 
 def update_server_stats():
 	logging.debug('updating server stats')
-	global last_update_server, server_stats, httpd_stats
-	global APACHE_CONF, REPORT_PREFORK
+	global last_update_server, server_stats
 
 	# If the uptime is still greater than the last checked uptime
 	# This will ensure these prefork values are only updated on apache restart
@@ -149,7 +156,11 @@ def update_server_stats():
 		logging.debug(' wait until server restarts')
 		return True
 	else:
-		last_update_server = httpd_stats['uptime']
+		if httpd_stats:
+			last_update_server = httpd_stats['uptime']
+		else:
+			# Stats have not been loaded
+			last_update_server = 0
 
 	#####
 	# Update apache version
@@ -222,7 +233,6 @@ def update_server_stats():
 
 def get_stat(name):
 	logging.debug('getting stat: ' + name)
-	global httpd_stats
 
 	ret = update_stats()
 
@@ -242,7 +252,6 @@ def get_stat(name):
 
 def get_server_stat(name):
 	logging.debug('getting server stat: ' + name)
-	global server_stats
 
 	ret = update_server_stats()
 
@@ -277,158 +286,117 @@ def metric_init(params):
 
 	time_max = 60
 
-	descriptors = [
-		{'name': 'httpd_server_version',
-		'call_back': get_server_stat,
-		'time_max': time_max,
-		'value_type': 'string',
-		'units': '',
-		'slope': 'both',
-		'format': '%u',
-		'description': 'Apache version number',
-		'groups': 'httpd'},
+	descriptions = dict(
+		server_version = {
+			'call_back': get_server_stat,
+			'value_type': 'string',
+			'units': '',
+			'description': 'Apache version number'},
 
-		{'name': 'httpd_busy_workers',
-		'call_back': get_stat,
-		'time_max': time_max,
-		'value_type': 'uint',
-		'units': 'workers',
-		'slope': 'both',
-		'format': '%u',
-		'description': 'Busy Workers',
-		'groups': 'httpd'},
+		busy_workers = {
+			'units': 'workers',
+			'description': 'Busy Workers'},
 
-		{'name': 'httpd_idle_workers',
-		'call_back': get_stat,
-		'time_max': time_max,
-		'value_type': 'uint',
-		'units': 'workers',
-		'slope': 'both',
-		'format': '%u',
-		'description': 'Idle Workers',
-		'groups': 'httpd'},
+		idle_workers = {
+			'units': 'workers',
+			'description': 'Idle Workers'},
 
-		{'name': 'httpd_avg_worker_size',
-		'call_back': get_stat,
-		'time_max': time_max,
-		'value_type': 'uint',
-		'units': 'KB',
-		'slope': 'both',
-		'format': '%u',
-		'description': 'Average Worker Size',
-		'groups': 'httpd'},
-
-		{'name': 'httpd_percent_cpu',
-		'call_back': get_stat,
-		'time_max': time_max,
-		'value_type': 'float',
-		'units': 'percent',
-		'slope': 'both',
-		'format': '%.1f',
-		'description': 'The percent CPU utilization that Apache is consuming',
-		'groups': 'httpd'}
-	]
+		avg_worker_size = {
+			'units': 'KB',
+			'description': 'Average Worker Size'},
+	)
 
 	if REPORT_EXTENDED:
-		descriptors.extend([
-			{'name': 'httpd_hits',
-			'call_back': get_stat,
-			'time_max': time_max,
-			'value_type': 'uint',
-			'units': 'req',
-			'slope': 'both',
-			'format': '%u',
-			'description': 'The number of requests that clinets have sent to the server',
-			'groups': 'httpd'},
+		descriptions['hits'] = {
+				'units': 'req',
+				'description': 'The number of requests that clinets have sent to the server'}
 
-			{'name': 'httpd_sent_kbytes',
-			'call_back': get_stat,
-			'time_max': time_max,
-			'value_type': 'uint',
-			'units': 'KB',
-			'slope': 'both',
-			'format': '%u',
-			'description': 'The number of Kbytes sent to all clients',
-			'groups': 'httpd'},
+		descriptions['sent_kbytes'] = {
+				'units': 'KB',
+				'description': 'The number of Kbytes sent to all clients'}
 
-			{'name': 'httpd_uptime',
-			'call_back': get_stat,
-			'time_max': time_max,
-			'value_type': 'uint',
-			'units': 'sec',
-			'slope': 'both',
-			'format': '%u',
-			'description': 'The number of seconds that the Apache server has been up',
-			'groups': 'httpd'}
-		])
+		descriptions['uptime'] = {
+				'units': 'sec',
+				'description': 'The number of seconds that the Apache server has been up'}
 
 	if REPORT_PREFORK:
-		descriptors.extend([
-			{'name': 'httpd_start_servers',
-			'call_back': get_server_stat,
-			'time_max': time_max,
-			'value_type': 'uint',
-			'units': 'processes',
-			'slope': 'zero',
-			'format': '%u',
-			'description': 'The number of child server processes created at startup',
-			'groups': 'httpd'},
+		descriptions['start_servers'] = {
+				'call_back': get_server_stat,
+				'units': 'processes',
+				'slope': 'zero',
+				'description': 'The number of child server processes created at startup'}
 
-			{'name': 'httpd_min_spare_servers',
-			'call_back': get_server_stat,
-			'time_max': time_max,
-			'value_type': 'uint',
-			'units': 'processes',
-			'slope': 'zero',
-			'format': '%u',
-			'description': 'The minimum number of idle child server processes',
-			'groups': 'httpd'},
+		descriptions['min_spare_servers'] = {
+				'call_back': get_server_stat,
+				'units': 'processes',
+				'slope': 'zero',
+				'description': 'The minimum number of idle child server processes'}
 
-			{'name': 'httpd_max_spare_servers',
-			'call_back': get_server_stat,
-			'time_max': time_max,
-			'value_type': 'uint',
-			'units': 'processes',
-			'slope': 'zero',
-			'format': '%u',
-			'description': 'The maximum number of idle child server processes',
-			'groups': 'httpd'},
+		descriptions['spare_servers'] = {
+				'call_back': get_server_stat,
+				'units': 'processes',
+				'slope': 'zero',
+				'description': 'The maximum number of idle child server processes'}
 
-			{'name': 'httpd_server_limit',
-			'call_back': get_server_stat,
-			'time_max': time_max,
-			'value_type': 'uint',
-			'units': 'processes',
-			'slope': 'zero',
-			'format': '%u',
-			'description': 'The upper limit on configurable number of processes',
-			'groups': 'httpd'},
+		descriptions['server_limit'] = {
+				'call_back': get_server_stat,
+				'units': 'processes',
+				'slope': 'zero',
+				'description': 'The upper limit on configurable number of processes'}
 
-			{'name': 'httpd_max_clients',
-			'call_back': get_server_stat,
-			'time_max': time_max,
-			'value_type': 'uint',
-			'units': 'connections',
-			'slope': 'zero',
-			'format': '%u',
-			'description': 'The maximum number of connections that will be processed simultaneously',
-			'groups': 'httpd'},
+		descriptions['max_clients'] = {
+				'call_back': get_server_stat,
+				'units': 'connections',
+				'slope': 'zero',
+				'description': 'The maximum number of connections that will be processed simultaneously'}
 
-			{'name': 'httpd_max_requests_per_child',
-			'call_back': get_server_stat,
-			'time_max': time_max,
-			'value_type': 'uint',
-			'units': 'requests',
-			'slope': 'zero',
-			'format': '%u',
-			'description': 'The maximum number of requests that an individual child server will handle during its life',
-			'groups': 'httpd'}
-		])
-
-	logging.debug('descriptors: ' + str(descriptors))
+		descriptions['max_requests_per_child'] = {
+				'call_back': get_server_stat,
+				'time_max': time_max,
+				'units': 'requests',
+				'slope': 'zero',
+				'description': 'The maximum number of requests that an individual child server will handle during its life'}
 
 	update_stats()
 	update_server_stats()
+
+	descriptors = []
+	for label in descriptions:
+		if httpd_stats.has_key(label):
+			d = {
+				'name': 'httpd_' + label,
+				'call_back': get_stat,
+				'time_max': time_max,
+				'value_type': 'uint',
+				'units': '',
+				'slope': 'both',
+				'format': '%u',
+				'description': label,
+				'groups': 'httpd'
+			}
+
+		elif server_stats.has_key(label):
+			d = {
+				'name': 'httpd_' + label,
+				'call_back': get_server_stat,
+				'time_max': time_max,
+				'value_type': 'uint',
+				'units': '',
+				'slope': 'both',
+				'format': '%u',
+				'description': label,
+				'groups': 'httpd'
+			}
+
+		else:
+			logging.error("skipped " + label)
+			continue
+
+		# Apply metric customizations from descriptions
+		d.update(descriptions[label])
+		descriptors.append(d)
+
+	#logging.debug('descriptors: ' + str(descriptors))
 
 	return descriptors
 
@@ -442,16 +410,16 @@ if __name__ == '__main__':
 
 	logging.debug('running from cmd line')
 	parser = OptionParser()
-	parser.add_option('-u', '--URL',          dest='status_url',                        default='http://localhost/server-status?auto', help='URL for Apache status page')
-	parser.add_option('-a', '--apache-conf',  dest='apache_conf',                       default='/etc/httpd/conf/httpd.conf',          help='path to httpd.conf')
-	parser.add_option('-t', '--apache-ctl',   dest='apache_ctl',                        default='/usr/sbin/apachectl',                 help='path to apachectl')
-	parser.add_option('-d', '--apache-bin',   dest='apache_bin',                        default='/usr/sbin/httpd',                     help='path to httpd')
-	parser.add_option('-e', '--extended',     dest='get_extended', action='store_true', default=False)
-	parser.add_option('-p', '--prefork',      dest='get_prefork',  action='store_true', default=False)
-	parser.add_option('-b', '--gmetric-bin',  dest='gmetric_bin',                       default='/usr/bin/gmetric',                    help='path to gmetric binary')
-	parser.add_option('-c', '--gmond-conf',   dest='gmond_conf',                        default='/etc/ganglia/gmond.conf',             help='path to gmond.conf')
-	parser.add_option('-g', '--gmetric',      dest='gmetric',      action='store_true', default=False,                                 help='submit via gmetric')
-	parser.add_option('-q', '--quiet',        dest='quiet',        action='store_true', default=False)
+	parser.add_option('-u', '--URL', dest='status_url', default='http://localhost/server-status?auto', help='URL for Apache status page')
+	parser.add_option('-a', '--apache-conf', dest='apache_conf', default='/etc/httpd/conf/httpd.conf', help='path to httpd.conf')
+	parser.add_option('-t', '--apache-ctl', dest='apache_ctl', default='/usr/sbin/apachectl', help='path to apachectl')
+	parser.add_option('-d', '--apache-bin', dest='apache_bin', default='/usr/sbin/httpd', help='path to httpd')
+	parser.add_option('-e', '--extended', dest='get_extended', action='store_true', default=False)
+	parser.add_option('-p', '--prefork', dest='get_prefork', action='store_true', default=False)
+	parser.add_option('-b', '--gmetric-bin', dest='gmetric_bin', default='/usr/bin/gmetric', help='path to gmetric binary')
+	parser.add_option('-c', '--gmond-conf', dest='gmond_conf', default='/etc/ganglia/gmond.conf', help='path to gmond.conf')
+	parser.add_option('-g', '--gmetric', dest='gmetric', action='store_true', default=False, help='submit via gmetric')
+	parser.add_option('-q', '--quiet', dest='quiet', action='store_true', default=False)
 
 	(options, args) = parser.parse_args()
 
