@@ -26,6 +26,11 @@
 ###    v1.0.1 - 2010-07-22
 ###       * Initial version
 ###
+###    v1.0.2 - 2010-08-03
+###       * Modified reads_per_sec to not calculate per second delta.
+###         This enables us to generate a better graph by stacking
+###         reads/writes with reads/writes merged.
+###
 
 ###  Copyright Jamie Isaacs. 2010
 ###  License to use, modify, and distribute under the GPL
@@ -135,8 +140,8 @@ def update_stats():
 		vals = out.split()
 		logging.debug('  vals: ' + str(vals))
 
-		get_delta(dev, 'reads_per_sec',  int(vals[3]))
-		get_delta(dev, 'writes_per_sec', int(vals[7]))
+		get_diff(dev, 'reads',  int(vals[3]))
+		get_diff(dev, 'writes', int(vals[7]))
 
 		get_diff(dev, 'reads_merged',  int(vals[4]))
 		get_diff(dev, 'writes_merged', int(vals[8]))
@@ -232,9 +237,9 @@ def metric_init(params):
 	time_max = 60
 
 	descriptions = dict(
-		reads_per_sec = {
-			'units': 'reads/sec',
-			'description': 'The number of reads completed per second'},
+		reads = {
+			'units': 'reads',
+			'description': 'The number of reads completed'},
 
 		reads_merged = {
 			'units': 'reads',
@@ -248,9 +253,9 @@ def metric_init(params):
 			'units': 'ms',
 			'description': 'The time in milliseconds spent reading'},
 
-		writes_per_sec = {
-			'units': 'writes/sec',
-			'description': 'The number of writes completed per second'},
+		writes = {
+			'units': 'writes',
+			'description': 'The number of writes completed'},
 
 		writes_merged = {
 			'units': 'writes',
