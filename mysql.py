@@ -132,6 +132,7 @@ def update_stats(get_innodb=True, get_master=True, get_slave=True):
 	# process variables
 	# http://dev.mysql.com/doc/refman/5.0/en/server-system-variables.html
 	mysql_stats['version'] = variables['version']
+	mysql_stats['max_connections'] = variables['max_connections']
 
 	# process global status
 	# http://dev.mysql.com/doc/refman/5.0/en/server-status-variables.html
@@ -612,6 +613,11 @@ def metric_init(params):
 			'description': "MySQL Version",
 			'value_type': 'string',
 		},
+
+		max_connections = {
+			'description': "The maximum permitted number of simultaneous client connections",
+			'slope': 'zero',
+		}
 	)
 
 	if REPORT_MASTER:
