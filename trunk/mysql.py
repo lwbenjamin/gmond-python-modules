@@ -248,6 +248,9 @@ def update_stats(get_innodb=True, get_master=True, get_slave=True):
 					mysql_stats[key] = int(innodb_status[istat]) - int(mysql_stats_last[key])
 				else:
 					mysql_stats[key] = 0
+
+				mysql_stats_last[key] = innodb_status[istat]
+
 			else:
 				mysql_stats[key] = innodb_status[istat]
 
