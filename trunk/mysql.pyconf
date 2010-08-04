@@ -311,6 +311,14 @@ collection_group {
   }
 
   metric {
+    name = "mysql_max_connections"
+  }
+
+  metric {
+    name = "mysql_query_cache_size"
+  }
+
+  metric {
     name = "mysql_opened_tables"
   }
 

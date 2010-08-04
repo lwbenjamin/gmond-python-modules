@@ -133,6 +133,7 @@ def update_stats(get_innodb=True, get_master=True, get_slave=True):
 	# http://dev.mysql.com/doc/refman/5.0/en/server-system-variables.html
 	mysql_stats['version'] = variables['version']
 	mysql_stats['max_connections'] = variables['max_connections']
+	mysql_stats['query_cache_size'] = variables['query_cache_size']
 
 	# process global status
 	# http://dev.mysql.com/doc/refman/5.0/en/server-status-variables.html
@@ -616,6 +617,11 @@ def metric_init(params):
 
 		max_connections = {
 			'description': "The maximum permitted number of simultaneous client connections",
+			'slope': 'zero',
+		},
+
+		query_cache_size = {
+			'description': "The amount of memory allocated for caching query results",
 			'slope': 'zero',
 		}
 	)
