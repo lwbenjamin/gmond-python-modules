@@ -26,6 +26,10 @@ THE SOFTWARE.
 ###    v1.0.1 - 2010-07-21
 ###       * Initial version
 ###
+###    v1.0.2 - 2010-08-04
+###       * Added system variables: max_connections and query_cache_size
+###       * Modified some innodb status variables to become deltas
+###
 
 ###  Copyright Jamie Isaacs. 2010
 ###  License to use, modify, and distribute under the GPL
