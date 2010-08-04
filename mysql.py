@@ -39,7 +39,7 @@ from DBUtil import parse_innodb_status
 
 import logging
 logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(name)s - %(levelname)s\t Thread-%(thread)d - %(message)s", filename='/tmp/gmond.log', filemode='w')
-logging.warning('starting up')
+logging.debug('starting up')
 
 last_update = 0
 mysql_conn_opts = {}
@@ -50,17 +50,22 @@ REPORT_INNODB = True
 REPORT_MASTER = True
 REPORT_SLAVE  = True
 
+MAX_UPDATE_TIME = 15
+
 def update_stats(get_innodb=True, get_master=True, get_slave=True):
-	logging.warning('updating stats')
+	logging.debug('updating stats')
 	global last_update
 	global mysql_stats, mysql_stats_last
 
-	if time.time() - last_update < 15:
+	cur_time = time.time()
+
+	if cur_time - last_update < MAX_UPDATE_TIME:
+		logging.debug(' wait ' + str(int(MAX_UPDATE_TIME - (cur_time - last_update))) + ' seconds')
 		return True
 	else:
-		last_update = time.time()
+		last_update = cur_time
 
-	logging.warning('refreshing stats')
+	logging.debug('refreshing stats')
 	mysql_stats = {}
 
 	# Get info from DB
@@ -100,6 +105,7 @@ def update_stats(get_innodb=True, get_master=True, get_slave=True):
 			cursor.execute("SHOW /*!50000 ENGINE*/ INNODB STATUS")
 			innodb_status = parse_innodb_status(cursor.fetchone()[0].split('\n'))
 			cursor.close()
+			logging.debug('innodb_status: ' + str(innodb_status))
 
 		if get_master:
 			cursor = conn.cursor(MySQLdb.cursors.Cursor)
@@ -125,10 +131,9 @@ def update_stats(get_innodb=True, get_master=True, get_slave=True):
 
 		conn.close()
 	except MySQLdb.OperationalError, (errno, errmsg):
-		logging.warning('error refreshing stats')
+		logging.error('error updating stats')
 		return False
 
-	logging.warning('success refreshing stats')
 	# process variables
 	# http://dev.mysql.com/doc/refman/5.0/en/server-system-variables.html
 	mysql_stats['version'] = variables['version']
@@ -225,10 +230,26 @@ def update_stats(get_innodb=True, get_master=True, get_slave=True):
 
 	mysql_stats['open_files_used'] = int(global_status['open_files']) / int(variables['open_files_limit'])
 
+	innodb_delta = (
+		'data_fsyncs',
+		'data_reads',
+		'data_writes',
+		'log_writes'
+	)
+
 	# process innodb status
 	if get_innodb:
 		for istat in innodb_status:
-			mysql_stats['innodb_' + istat] = innodb_status[istat]
+			key = 'innodb_' + istat
+
+			if istat in innodb_delta:
+				# Calculate deltas for counters
+				if key in mysql_stats_last:
+					mysql_stats[key] = int(innodb_status[istat]) - int(mysql_stats_last[key])
+				else:
+					mysql_stats[key] = 0
+			else:
+				mysql_stats[key] = innodb_status[istat]
 
 	# process master logs
 	if get_master:
@@ -257,10 +278,14 @@ def update_stats(get_innodb=True, get_master=True, get_slave=True):
 		mysql_stats['slave_relay_log_pos'] = slave_status['relay_log_pos']
 		mysql_stats['slave_relay_log_space'] = slave_status['relay_log_space']
 
+
+	logging.debug('success updating stats')
+	logging.debug('mysql_stats: ' + str(mysql_stats))
+
 def get_stat(name):
 	logging.info("getting stat: %s" % name)
 	global mysql_stats
-	logging.warning(mysql_stats)
+	#logging.debug(mysql_stats)
 
 	global REPORT_INNODB
 	global REPORT_MASTER
@@ -274,11 +299,11 @@ def get_stat(name):
 		else:
 			label = name
 
-		logging.warning("fetching %s" % name)
+		logging.debug("fetching %s" % name)
 		try:
 			return mysql_stats[label]
 		except:
-			logging.warning("failed to fetch %s" % name)
+			logging.error("failed to fetch %s" % name)
 			return 0
 	else:
 		return 0
@@ -296,7 +321,7 @@ def metric_init(params):
 	REPORT_MASTER = str(params.get('get_master', True)) == "True"
 	REPORT_SLAVE  = str(params.get('get_slave', True)) == "True"
 
-	logging.warning("init: " + str(params))
+	logging.debug("init: " + str(params))
 
 	mysql_conn_opts = dict(
 		host = params.get('host', 'localhost'),
@@ -712,19 +737,19 @@ def metric_init(params):
 			},
 
 			innodb_data_fsyncs = {
-				'description': "InnoDB",
+				'description': "The number of fsync() operations",
 				'value_type':'uint',
 				'units': 'fsyncs',
 			},
 
 			innodb_data_reads = {
-				'description': "InnoDB",
+				'description': "The number of data reads",
 				'value_type':'uint',
 				'units': 'reads',
 			},
 
 			innodb_data_writes = {
-				'description': "InnoDB",
+				'description': "The number of data writes",
 				'value_type':'uint',
 				'units': 'writes',
 			},
@@ -780,7 +805,7 @@ def metric_init(params):
 			},
 
 			innodb_log_writes = {
-				'description': "InnoDB",
+				'description': "The number of physical writes to the log file",
 				'value_type':'uint',
 				'units': 'writes',
 			},
@@ -957,6 +982,9 @@ def metric_init(params):
 	descriptors = []
 	update_stats(REPORT_INNODB, REPORT_MASTER, REPORT_SLAVE)
 
+	time.sleep(MAX_UPDATE_TIME)
+	update_stats(REPORT_INNODB, REPORT_MASTER, REPORT_SLAVE)
+
 	for stats_descriptions in (innodb_stats_descriptions, master_stats_descriptions, misc_stats_descriptions, slave_stats_descriptions):
 		for label in stats_descriptions:
 			if mysql_stats.has_key(label):
@@ -980,7 +1008,7 @@ def metric_init(params):
 			else:
 				logging.error("skipped " + label)
 
-	logging.warning(str(descriptors))
+	#logging.debug(str(descriptors))
 	return descriptors
 
 def metric_cleanup():
@@ -991,7 +1019,7 @@ if __name__ == '__main__':
 	from optparse import OptionParser
 	import os
 
-	logging.warning('running from cmd line')
+	logging.debug('running from cmd line')
 	parser = OptionParser()
 	parser.add_option("-H", "--Host", dest="host", help="Host running mysql", default="localhost")
 	parser.add_option("-u", "--user", dest="user", help="user to connect as", default="")
