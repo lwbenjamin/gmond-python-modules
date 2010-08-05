@@ -13,6 +13,8 @@
 ###      * Modified jmxsh to read from stdin
 ###      * Tested to work with gmond python module
 ###
+###    v1.0.2 - 2010-08-05
+###      * Added support for composite data
 
 ###  Copyright Jamie Isaacs. 2010
 ###  License to use, modify, and distribute under the GPL
@@ -20,11 +22,12 @@
 
 import time
 import subprocess
-import traceback, sys
+import traceback, sys, re
 import tempfile
 import logging
 
 logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(name)s - %(levelname)s\t Thread-%(thread)d - %(message)s", filename='/tmp/gmond.log', filemode='w')
+#logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s\t Thread-%(thread)d - %(message)s", filename='/tmp/gmond.log2')
 logging.debug('starting up')
 
 last_update = 0
@@ -106,6 +109,23 @@ def update_stats():
 			params = line.split(': ')
 			name = params[0]
 			val = params[1]
+
+			if 'CompositeDataSupport' in val:
+				# break up the composite data into separate values
+				composite_contents = re.search('{(.*?)}', val, re.DOTALL)
+				if composite_contents:
+					for composite_vals in composite_contents.group(1).split(', '):
+						_params = composite_vals.split('=')
+						_name = name + '_' + _params[0]
+						_val = _params[1]
+
+						stats[_name] = get_numeric(_val)
+				else:
+					logging.warning('failed extracting composite values for ' + name)
+					continue
+
+				continue
+
 			stats[name] = get_numeric(val)
 	except:
 		logging.warning('Error parsing\n' + traceback.print_exc(file=sys.stdout))
