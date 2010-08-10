@@ -18,6 +18,12 @@
 ###
 ###    v1.0.3 - 2010-08-10
 ###      * Added support additional slope variable
+###
+###    v1.0.4 - 2010-08-10
+###      * Removed slope variable
+###      * Added delta/diff option
+###        - diff will compute difference since last update
+###        - delta wil compute difference per second since last update
 
 ###  Copyright Jamie Isaacs. 2010
 ###  License to use, modify, and distribute under the GPL
@@ -35,9 +41,10 @@ logging.debug('starting up')
 
 last_update = 0
 stats = {}
+last_val = {}
 
 METRICS = {}
-SLOPE = {}
+COMP = {}
 HOST = 'localhost'
 PORT = '8887'
 NAME = PORT
@@ -75,15 +82,13 @@ def get_gmond_format(val):
 
 def update_stats():
 	logging.debug('updating stats')
-	global last_update, stats
+	global last_update, stats, last_val
 	
 	cur_time = time.time()
 
 	if cur_time - last_update < MAX_UPDATE_TIME:
 		logging.debug(' wait ' + str(int(MAX_UPDATE_TIME - (cur_time - last_update))) + ' seconds')
 		return True
-	else:
-		last_update = cur_time
 
 	#####
 	# Build jmxsh script into tmpfile
@@ -130,14 +135,37 @@ def update_stats():
 
 				continue
 
-			stats[name] = get_numeric(val)
+			try:
+				comp = COMP[name]
+				if 'diff' in comp:
+					if name in last_val:
+						stats[name] = int(val) - last_val[name]
+					else:
+						stats[name] = 0
+
+					last_val[name] = int(val)
+
+				elif 'delta' in comp:
+					interval = cur_time - last_update
+					if name in last_val:
+						stats[name] = (float(val) - last_val[name]) / float(interval)
+					else:
+						stats[name] = 0.0
+
+					last_val[name] = float(val)
+
+			except KeyError:
+				stats[name] = get_numeric(val)
+
 	except:
 		logging.warning('Error parsing\n' + traceback.print_exc(file=sys.stdout))
 		return False
 
 	logging.debug('success refreshing stats')
 	logging.debug('stats: ' + str(stats))
+	logging.debug('last_val: ' + str(last_val))
 
+	last_update = cur_time
 	return True
 
 def get_stat(name):
@@ -179,9 +207,9 @@ def metric_init(params):
 		val = mbean.split('##')
 		METRICS[name] = val[0]
 
-		# If optional slope exists in value
+		# If optional delta/diff exists in value
 		try:
-			SLOPE[name] = val[1]
+			COMP[name] = val[1]
 		except IndexError:
 			pass
 
@@ -191,16 +219,9 @@ def metric_init(params):
 	descriptions = dict()
 	for name in stats:
 		(value_type, format) = get_gmond_format(stats[name])
-
-		try:
-			slope = SLOPE[name]
-		except KeyError:
-			slope = 'both'
-
 		descriptions[name] = {
 			'value_type': value_type,
-			'format': format,
-			'slope': slope
+			'format': format
 		}
 
 	time_max = 60
@@ -215,6 +236,7 @@ def metric_init(params):
 				'value_type': 'uint',
 				'units': '',
 				'format': '%u',
+				'slope': 'both',
 				'description': label,
 				'groups': 'jmx'
 			}
