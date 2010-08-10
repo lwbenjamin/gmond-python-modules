@@ -15,6 +15,9 @@
 ###
 ###    v1.0.2 - 2010-08-05
 ###      * Added support for composite data
+###
+###    v1.0.3 - 2010-08-10
+###      * Added support additional slope variable
 
 ###  Copyright Jamie Isaacs. 2010
 ###  License to use, modify, and distribute under the GPL
@@ -34,6 +37,7 @@ last_update = 0
 stats = {}
 
 METRICS = {}
+SLOPE = {}
 HOST = 'localhost'
 PORT = '8887'
 NAME = PORT
@@ -170,7 +174,16 @@ def metric_init(params):
 	except:
 		logging.warning('Incorrect parameters')
 
-	METRICS = params
+	# Setup METRICS variable from parameters
+	for name,mbean in params.items():
+		val = mbean.split('##')
+		METRICS[name] = val[0]
+
+		# If optional slope exists in value
+		try:
+			SLOPE[name] = val[1]
+		except IndexError:
+			pass
 
 	update_stats()
 
@@ -178,9 +191,16 @@ def metric_init(params):
 	descriptions = dict()
 	for name in stats:
 		(value_type, format) = get_gmond_format(stats[name])
+
+		try:
+			slope = SLOPE[name]
+		except KeyError:
+			slope = 'both'
+
 		descriptions[name] = {
 			'value_type': value_type,
-			'format': format
+			'format': format,
+			'slope': slope
 		}
 
 	time_max = 60
@@ -194,7 +214,6 @@ def metric_init(params):
 				'time_max': time_max,
 				'value_type': 'uint',
 				'units': '',
-				'slope': 'both',
 				'format': '%u',
 				'description': label,
 				'groups': 'jmx'
