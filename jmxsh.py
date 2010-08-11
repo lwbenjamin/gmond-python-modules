@@ -148,6 +148,7 @@ def update_stats():
 						else:
 							# value was reset since last update
 							val = 0
+							stats[name] = val
 					else:
 						stats[name] = 0
 
@@ -162,6 +163,7 @@ def update_stats():
 						else:
 							# value was reset since last update
 							val = 0.0
+							stats[name] = val
 					else:
 						stats[name] = 0.0
 
