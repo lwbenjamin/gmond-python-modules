@@ -24,6 +24,9 @@
 ###      * Added delta/diff option
 ###        - diff will compute difference since last update
 ###        - delta wil compute difference per second since last update
+###
+###    v1.0.5 - 2010-08-11
+###      * Fixed bug with value resets
 
 ###  Copyright Jamie Isaacs. 2010
 ###  License to use, modify, and distribute under the GPL
@@ -138,21 +141,31 @@ def update_stats():
 			try:
 				comp = COMP[name]
 				if 'diff' in comp:
+					val = int(val)
 					if name in last_val:
-						stats[name] = int(val) - last_val[name]
+						if val > last_val[name]:
+							stats[name] = val - last_val[name]
+						else:
+							# value was reset since last update
+							val = 0
 					else:
 						stats[name] = 0
 
-					last_val[name] = int(val)
+					last_val[name] = val
 
 				elif 'delta' in comp:
+					val = float(val)
 					interval = cur_time - last_update
-					if name in last_val:
-						stats[name] = (float(val) - last_val[name]) / float(interval)
+					if name in last_val and interval > 0:
+						if val > last_val[name]:
+							stats[name] = (val - last_val[name]) / float(interval)
+						else:
+							# value was reset since last update
+							val = 0.0
 					else:
 						stats[name] = 0.0
 
-					last_val[name] = float(val)
+					last_val[name] = val
 
 			except KeyError:
 				stats[name] = get_numeric(val)
