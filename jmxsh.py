@@ -147,8 +147,7 @@ def update_stats():
 							stats[name] = val - last_val[name]
 						else:
 							# value was reset since last update
-							val = 0
-							stats[name] = val
+							stats[name] = 0
 					else:
 						stats[name] = 0
 
@@ -162,8 +161,7 @@ def update_stats():
 							stats[name] = (val - last_val[name]) / float(interval)
 						else:
 							# value was reset since last update
-							val = 0.0
-							stats[name] = val
+							stats[name] = 0.0
 					else:
 						stats[name] = 0.0
 
