@@ -109,7 +109,7 @@ def update_stats():
 		#logging.debug('cmd: ' + cmd + '\nout: ' + out + '\nerr: ' + err + '\ncode: ' + str(p.returncode))
 
 		if p.returncode:
-			logging.warning('failed executing ps\n' + cmd + '\n' + err)
+			logging.warning('failed executing jmxsh\n' + cmd + '\n' + err)
 			return False
 	except:
 		logging.warning('Error running jmx java\n' + traceback.print_exc(file=sys.stdout))
