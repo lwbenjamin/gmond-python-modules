@@ -30,6 +30,9 @@ THE SOFTWARE.
 ###       * Added system variables: max_connections and query_cache_size
 ###       * Modified some innodb status variables to become deltas
 ###
+###  Requires:
+###       * yum install MySQL-python
+###       * DBUtil.py
 
 ###  Copyright Jamie Isaacs. 2010
 ###  License to use, modify, and distribute under the GPL
