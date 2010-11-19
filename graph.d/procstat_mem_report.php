@@ -6,11 +6,25 @@ function graph_procstat_mem_report ( &$rrdtool_graph ) {
     global $context,
            $hostname,
            $graph_var,
-           $rainbow,
            $range,
            $rrd_dir,
            $size,
            $strip_domainname;
+
+$rainbow = array(
+    '008000', // green
+    '0000FF', // blue
+    'FF0000', // red
+    'FFEA00', // yellow
+    '9900CC', // purple
+    '00FF00', // lime green
+    '00FFFF', // aqua blue
+    'FF00FF', // magenta
+    '808000', // olive
+    '008080', // teal
+    '808080', // gray
+    '000000'  // black
+);
 
     if ($strip_domainname) {
        $hostname = strip_domainname($hostname);
